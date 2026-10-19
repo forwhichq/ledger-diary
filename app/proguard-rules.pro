@@ -1,0 +1,2 @@
+-keep class com.ledgerdiary.app.data.** { *; }
+-keepattributes *Annotation*
