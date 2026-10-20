@@ -67,11 +67,12 @@ interface CategoryDao {
 
 @Dao
 interface DiaryDao {
-    @Query("SELECT * FROM diary_entries ORDER BY date DESC")
+    // 同一天多篇时，天内按写入顺序倒序（最新的那篇在最上面）
+    @Query("SELECT * FROM diary_entries ORDER BY date DESC, createdAt DESC")
     fun observeEntries(): Flow<List<DiaryEntryEntity>>
 
-    @Query("SELECT * FROM diary_entries WHERE date = :date LIMIT 1")
-    suspend fun entryByDate(date: String): DiaryEntryEntity?
+    @Query("SELECT * FROM diary_entries WHERE date = :date ORDER BY createdAt ASC")
+    suspend fun entriesByDate(date: String): List<DiaryEntryEntity>
 
     @Query("SELECT * FROM diary_entries WHERE id = :id LIMIT 1")
     suspend fun entryById(id: String): DiaryEntryEntity?

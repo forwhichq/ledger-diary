@@ -48,6 +48,7 @@ class BackupManager(private val context: Context, private val repo: Repository) 
         val profile = repo.getProfile()
 
         val backup = BackupFile(
+            appVersion = com.ledgerdiary.app.BuildConfig.VERSION_NAME,
             deviceId = profile?.deviceId ?: "",
             profile = profile?.let {
                 ProfileDto(it.nickname, it.avatarFile, it.deviceId, it.deviceLabel)
@@ -59,7 +60,16 @@ class BackupManager(private val context: Context, private val repo: Repository) 
                 CategoryDto(it.id, it.name, it.icon, it.colorHex, it.sortOrder, it.usageCount)
             },
             diaryEntries = entries.map {
-                DiaryEntryDto(it.id, it.date, it.mood, it.tags, it.weather, it.location, it.createdAt, it.updatedAt)
+                DiaryEntryDto(
+                    id = it.id,
+                    date = it.date,
+                    mood = it.mood,
+                    tags = it.tags,
+                    weather = it.weather,
+                    location = it.location,
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt
+                )
             },
             diarySegments = segments.map {
                 DiarySegmentDto(it.id, it.entryId, it.text, it.createdAt, it.updatedAt, it.sortOrder)
@@ -235,8 +245,18 @@ class BackupManager(private val context: Context, private val repo: Repository) 
             db.categoryDao().upsertAll(b.categories.map {
                 CategoryEntity(it.id, it.name, it.icon, it.colorHex, it.sortOrder, it.usageCount)
             })
+            // 用命名参数：以后 DiaryEntryEntity 加字段时，位置参数会静默错位，命名参数会编译报错
             db.diaryDao().upsertEntries(b.diaryEntries.map {
-                DiaryEntryEntity(it.id, it.date, it.mood, it.tags, it.weather, it.location, it.createdAt, it.updatedAt)
+                DiaryEntryEntity(
+                    id = it.id,
+                    date = it.date,
+                    mood = it.mood,
+                    tags = it.tags,
+                    weather = it.weather,
+                    location = it.location,
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt
+                )
             })
             db.diaryDao().upsertSegments(b.diarySegments.map {
                 DiarySegmentEntity(it.id, it.entryId, it.text, it.createdAt, it.updatedAt, it.sortOrder)

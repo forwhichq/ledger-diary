@@ -104,14 +104,22 @@ fun AppRoot(vm: AppViewModel) {
                 )
             }
             composable("diary") {
-                DiaryListScreen(vm, onOpen = { date -> nav.navigate("diaryEdit?date=$date") })
+                DiaryListScreen(
+                    vm = vm,
+                    onOpenEntry = { id -> nav.navigate("diaryEdit?id=$id") },
+                    onNewEntry = { date -> nav.navigate("diaryEdit?date=$date") }
+                )
             }
             composable(
-                "diaryEdit?date={date}",
-                arguments = listOf(navArgument("date") { type = NavType.StringType; nullable = true; defaultValue = null })
+                "diaryEdit?id={id}&date={date}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument("date") { type = NavType.StringType; nullable = true; defaultValue = null }
+                )
             ) { entry ->
                 DiaryEditScreen(
                     vm = vm,
+                    entryId = entry.arguments?.getString("id"),
                     date = entry.arguments?.getString("date"),
                     onDone = { nav.popBackStack() }
                 )
@@ -121,7 +129,8 @@ fun AppRoot(vm: AppViewModel) {
                 CalendarScreen(
                     vm = vm,
                     onAddForDate = { date -> nav.navigate("add?date=$date") },
-                    onOpenDiary = { date -> nav.navigate("diaryEdit?date=$date") }
+                    onOpenDiaryEntry = { id -> nav.navigate("diaryEdit?id=$id") },
+                    onNewDiaryForDate = { date -> nav.navigate("diaryEdit?date=$date") }
                 )
             }
             composable("me") {

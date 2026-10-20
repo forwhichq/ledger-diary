@@ -20,11 +20,13 @@ import androidx.compose.ui.unit.dp
 import com.ledgerdiary.app.data.TransactionEntity
 import com.ledgerdiary.app.ui.AppViewModel
 import com.ledgerdiary.app.ui.components.MoneyText
+import com.ledgerdiary.app.ui.components.MoodDot
 import com.ledgerdiary.app.ui.components.SurfaceCard
 import com.ledgerdiary.app.ui.theme.ExpenseRed
 import com.ledgerdiary.app.ui.theme.IncomeGreen
 import com.ledgerdiary.app.ui.theme.MoodPalette
 import com.ledgerdiary.app.util.DateUtils
+import com.ledgerdiary.app.util.DiaryUtils
 import com.ledgerdiary.app.util.Money
 import java.time.LocalDate
 import java.time.YearMonth
@@ -34,7 +36,8 @@ import java.time.YearMonth
 fun CalendarScreen(
     vm: AppViewModel,
     onAddForDate: (String) -> Unit,
-    onOpenDiary: (String) -> Unit
+    onOpenDiaryEntry: (String) -> Unit,
+    onNewDiaryForDate: (String) -> Unit
 ) {
     val all by vm.transactions.collectAsState()
     val entries by vm.diaryEntries.collectAsState()
@@ -42,7 +45,8 @@ fun CalendarScreen(
     var selected by remember { mutableStateOf(DateUtils.today()) }
 
     val txByDate = remember(all) { all.groupBy { it.date } }
-    val diaryByDate = remember(entries) { entries.associateBy { it.date } }
+    // 一天可以有多篇，所以这里是 groupBy 而不是 associateBy
+    val diaryByDate = remember(entries) { entries.groupBy { it.date } }
 
     val first = ym.atDay(1)
     val daysInMonth = ym.lengthOfMonth()
@@ -57,7 +61,11 @@ fun CalendarScreen(
     val monthIncome = monthList.filter { it.direction == "INCOME" }.sumOf { it.amountCents }
 
     val selList = txByDate[selected] ?: emptyList()
-    val selDiary = diaryByDate[selected]
+    val selDiaries = remember(diaryByDate, selected) {
+        (diaryByDate[selected] ?: emptyList()).sortedBy { it.createdAt }
+    }
+    // 当天心情：取当天最后一篇填了心情的（只写一篇时和以前完全一样）
+    val selMood = remember(selDiaries) { DiaryUtils.dayMood(selDiaries) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -114,6 +122,7 @@ fun CalendarScreen(
                                 val dateStr = "%04d-%02d-%02d".format(ym.year, ym.monthValue, day)
                                 val hasTx = txByDate.containsKey(dateStr)
                                 val hasDiary = diaryByDate.containsKey(dateStr)
+                                val diaryCount = diaryByDate[dateStr]?.size ?: 0
                                 val isToday = dateStr == DateUtils.today()
                                 val isSel = dateStr == selected
                                 Box(
@@ -150,6 +159,11 @@ fun CalendarScreen(
                                                 Modifier.size(4.dp).clip(RoundedCornerShape(50))
                                                     .background(MoodPalette[4])
                                             )
+                                            // 一天多篇：再加一个小点，提示这天不止一篇
+                                            if (diaryCount > 1) Box(
+                                                Modifier.size(4.dp).clip(RoundedCornerShape(50))
+                                                    .background(MoodPalette[2])
+                                            )
                                         }
                                     }
                                 }
@@ -163,6 +177,7 @@ fun CalendarScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendDot(ExpenseRed, "有账")
                     LegendDot(MoodPalette[4], "有日记")
+                    LegendDot(MoodPalette[2], "多篇")
                 }
             }
         }
@@ -210,33 +225,75 @@ fun CalendarScreen(
         }
 
         item {
-            // 有日记就点进去编辑，没有就给个「写日记」入口 —— 日历是找日子的地方，
-            // 不该只能看不能进。
-            SurfaceCard(modifier = Modifier.clickable { onOpenDiary(selected) }) {
+            // 一天可以有多篇：先把这天已有的篇列出来（点哪篇进哪篇），
+            // 再给一个「再写一篇」入口。日历是找日子的地方，不该只能看不能进。
+            SurfaceCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (selDiary != null) "这天有日记" else "这天还没有日记",
+                            when {
+                                selDiaries.isEmpty() -> "这天还没有日记"
+                                selDiaries.size == 1 -> "这天有 1 篇日记"
+                                else -> "这天有 " + selDiaries.size + " 篇日记"
+                            },
                             style = MaterialTheme.typography.labelLarge
                         )
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            if (selDiary != null) {
-                                "心情 " + (if (selDiary.mood > 0) selDiary.mood.toString() + "/5" else "未填") +
-                                        (selDiary.weather?.let { " · " + it } ?: "") +
-                                        (selDiary.tags.takeIf { it.isNotBlank() }?.let { " · #" + it } ?: "")
+                            if (selDiaries.isEmpty()) {
+                                "点下面「写这篇」，补写这一天"
                             } else {
-                                "点这里补写这一天"
+                                "心情 " + (if (selMood > 0) selMood.toString() + "/5" else "未填") +
+                                        " · 点某一篇进去改"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        if (selDiary != null) "打开" else "写",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    if (selMood > 0) MoodDot(selMood, 12)
+                }
+
+                // 当天每一篇：时间 + 地点 + 心情 + 一句话预览
+                selDiaries.forEachIndexed { i, e ->
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onOpenDiaryEntry(e.id) }
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            DateUtils.timeOf(e.createdAt),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "第 " + (i + 1) + " 篇" +
+                                        (e.location?.takeIf { it.isNotBlank() }?.let { " · " + it } ?: ""),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1
+                            )
+                        }
+                        if (e.mood > 0) MoodDot(e.mood, 10)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "打开",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                FilledTonalButton(
+                    onClick = { onNewDiaryForDate(selected) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (selDiaries.isEmpty()) "写这篇" else "再写一篇")
                 }
             }
         }

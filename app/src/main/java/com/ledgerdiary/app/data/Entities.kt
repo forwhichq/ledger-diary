@@ -42,14 +42,17 @@ data class CategoryEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "diary_entries", indices = [Index(value = ["date"], unique = true)])
+// 一天可以写多篇日记，所以 date 上不能有唯一约束，只留普通索引（按天查当天那几篇）。
+// 「当天心情」不单独存，由当天几篇里的 mood 派生（见 util/DiaryUtils.kt 的 dayMoodOf）：
+// 用户只写一篇时行为和以前完全一样，写多篇时以最后写的那篇为准。
+@Entity(tableName = "diary_entries", indices = [Index("date")])
 data class DiaryEntryEntity(
     @PrimaryKey val id: String,
-    val date: String,               // YYYY-MM-DD，一天一篇
-    val mood: Int = 0,              // 0 = 未填，1..5
+    val date: String,               // YYYY-MM-DD，同一天可以有多篇
+    val mood: Int = 0,              // 0 = 未填，1..5；每篇各记各的
     val tags: String = "",          // 逗号分隔
     val weather: String? = null,    // 可选，手动填
-    val location: String? = null,   // 可选，手动填
+    val location: String? = null,   // 可选，手动填；每篇日记一个地址
     val createdAt: Long,
     val updatedAt: Long = createdAt
 )

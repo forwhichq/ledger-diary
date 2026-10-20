@@ -131,7 +131,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(8.dp))
         Text(
-            "记账日记 v1.0.0",
+            "记账日记 v" + com.ledgerdiary.app.BuildConfig.VERSION_NAME,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),

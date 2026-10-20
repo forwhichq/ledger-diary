@@ -25,6 +25,9 @@ keystore/
 *.dex
 *.class
 
+# 本地验证用的临时产物（截图、种子 SQL、测试备份包、旧版本 APK）
+build-archive/
+
 # 日志与临时文件
 *.log
 *.hprof

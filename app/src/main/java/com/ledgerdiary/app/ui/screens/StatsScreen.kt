@@ -21,6 +21,7 @@ import com.ledgerdiary.app.ui.components.*
 import com.ledgerdiary.app.ui.theme.ExpenseRed
 import com.ledgerdiary.app.ui.theme.IncomeGreen
 import com.ledgerdiary.app.util.DateUtils
+import com.ledgerdiary.app.util.DiaryUtils
 import com.ledgerdiary.app.util.Money
 import java.time.LocalDate
 import java.time.YearMonth
@@ -292,7 +293,8 @@ fun StatsScreen(vm: AppViewModel) {
                 val n = ChronoUnit.DAYS.between(start, end).toInt() + 1
                 val spendMap = list.filter { it.direction == "EXPENSE" }
                     .groupBy { it.date }.mapValues { it.value.sumOf { t -> t.amountCents } }
-                val moodMap = diary.associate { it.date to it.mood }
+                // 一天可以有多篇，当天心情取最后一篇填了心情的（见 DiaryUtils.dayMood）
+                val moodMap = DiaryUtils.moodByDate(diary)
                 val days = (0 until n).map { start.plusDays(it.toLong()) }
                 val spends = days.map { (spendMap[it.toString()] ?: 0L) / 100f }
                 val moods = days.map { moodMap[it.toString()] ?: 0 }
@@ -349,9 +351,18 @@ fun StatsScreen(vm: AppViewModel) {
                 SurfaceCard {
                     Text("有心情记录的天数", style = MaterialTheme.typography.labelLarge)
                     Spacer(Modifier.height(6.dp))
+                    // 按「天」数，不是按「篇」数：同一天写多篇只算一天
+                    val dayCount = remember(diary) {
+                        diary.groupBy { it.date }.count { (_, list) -> DiaryUtils.dayMood(list) > 0 }
+                    }
                     Text(
-                        diary.count { it.mood > 0 }.toString() + " 天",
+                        dayCount.toString() + " 天",
                         style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        "共 " + diary.size + " 篇",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

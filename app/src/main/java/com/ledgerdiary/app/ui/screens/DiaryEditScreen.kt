@@ -51,18 +51,26 @@ private const val MAX_PHOTOS = 9
 
 /**
  * 写日记 / 改日记。
- * 「一天一篇 + 可分多段」：一篇日记里可以有多段文字，每段有自己的时间戳，
- * 这样早上写一段、晚上补一段，时间线是真实的。
+ *
+ * 数据模型：一天可以有多篇。这里的「一篇」= diary_entries 的一行，
+ * 篇内部还可以分多段文字（每段有自己的时间戳），所以早上写一段、中午写另一篇、
+ * 晚上再补一段，时间线都是真实的。
+ *
+ * 参数：
+ *   entryId —— 有值 = 改这一篇；null = 新写一篇（date 决定写在哪天）
+ *   date    —— 新写时用哪天；改的时候以库里那篇的 date 为准
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
+fun DiaryEditScreen(vm: AppViewModel, entryId: String?, date: String?, onDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
 
     var curDate by remember { mutableStateOf(date ?: DateUtils.today()) }
     var loaded by remember { mutableStateOf(false) }
     var entry by remember { mutableStateOf<DiaryEntryEntity?>(null) }
+    // 新写一篇时，提示「这天已经写过几篇」，避免用户以为重复了
+    var sameDayCount by remember { mutableIntStateOf(0) }
     var segments by remember { mutableStateOf<List<DiarySegmentEntity>>(emptyList()) }
     var photos by remember { mutableStateOf<List<DiaryPhotoEntity>>(emptyList()) }
     var mood by remember { mutableIntStateOf(0) }
@@ -74,10 +82,11 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
     var showDatePicker by remember { mutableStateOf(false) }
     var fullPhoto by remember { mutableStateOf<String?>(null) }
 
-    suspend fun load(d: String) {
-        val existing = vm.repo.loadDiary(d)
+    suspend fun load() {
+        val existing = entryId?.let { vm.repo.loadDiaryById(it) }
         if (existing != null) {
             entry = existing.entry
+            curDate = existing.entry.date
             segments = existing.segments
             photos = existing.photos
             mood = existing.entry.mood
@@ -87,16 +96,20 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
             location = existing.entry.location ?: ""
             locationOn = !existing.entry.location.isNullOrBlank()
         } else {
+            // 新写一篇：不查重、不复用当天已有的那篇
             entry = null
             segments = emptyList()
             photos = emptyList()
             mood = 0; tags = ""; weather = ""; weatherOn = false
             location = ""; locationOn = false
         }
+        sameDayCount = vm.repo.loadDiaries(curDate).size
         loaded = true
     }
 
-    LaunchedEffect(curDate) { load(curDate) }
+    // entryId 决定编辑哪一篇，只在进页面时加载一次；
+    // 日期选择改的是 curDate，不重新加载（否则刚写的内容会被冲掉）。
+    LaunchedEffect(entryId) { load() }
 
     suspend fun persist() {
         val now = System.currentTimeMillis()
@@ -106,6 +119,7 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
             createdAt = now
         )
         val saved = e.copy(
+            date = curDate,
             mood = mood,
             tags = tags.trim(),
             weather = if (weatherOn && weather.isNotBlank()) weather else null,
@@ -159,10 +173,15 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
         )
     }
 
-    // 注意 key 必须带 curDate：否则 loaded 一直是 true，切换到另一天（那天还没日记）时
+    // 注意 key 必须带 loaded：否则 loaded 一直是 true，切到另一篇（那篇还没有段落）时
     // segments 为空却不会补段，页面就一个输入框都没有。
-    LaunchedEffect(curDate, loaded) {
+    LaunchedEffect(loaded) {
         if (loaded && segments.isEmpty()) addSegment()
+    }
+
+    // 新写一篇时，改日期要跟着刷新「这天已经写过几篇」
+    LaunchedEffect(curDate, loaded) {
+        if (loaded && entry == null) sameDayCount = vm.repo.loadDiaries(curDate).size
     }
 
     Scaffold(
@@ -176,7 +195,14 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
                             style = MaterialTheme.typography.titleLarge
                         )
                         Text(
-                            DateUtils.friendlyDate(curDate),
+                            buildString {
+                                append(DateUtils.friendlyDate(curDate))
+                                if (entry == null) {
+                                    // 让「一天多篇」这件事在页面上看得见，不然用户会以为重复了
+                                    if (sameDayCount > 0) append(" · 这天已有 " + sameDayCount + " 篇")
+                                    else append(" · 这天第 1 篇")
+                                }
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -217,8 +243,16 @@ fun DiaryEditScreen(vm: AppViewModel, date: String?, onDone: () -> Unit) {
                     Modifier.fillMaxWidth().clickable { showDatePicker = true },
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("日期", style = MaterialTheme.typography.labelLarge)
-                    Spacer(Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Text("日期", style = MaterialTheme.typography.labelLarge)
+                        if (entry == null && sameDayCount > 0) {
+                            Text(
+                                "这天已经写过 " + sameDayCount + " 篇，保存后会再多一篇",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Text(
                         DateUtils.friendlyDate(curDate),
                         style = MaterialTheme.typography.bodyMedium,

@@ -64,22 +64,27 @@ class Repository private constructor(private val db: AppDatabase) {
 
     // ---------- 日记 ----------
 
-    suspend fun getOrCreateEntry(date: String): DiaryEntryEntity {
-        db.diaryDao().entryByDate(date)?.let { return it }
+    /**
+     * 在指定日期新写一篇日记。
+     * 注意：这里不做「同一天已存在就复用」的查重 —— 一天可以有多篇，
+     * 每次调用都是一篇新的。要复用请先按 id 查（loadDiaryById）。
+     */
+    suspend fun createEntry(date: String): DiaryEntryEntity {
         val now = System.currentTimeMillis()
         val e = DiaryEntryEntity(id = UUID.randomUUID().toString(), date = date, createdAt = now)
         db.diaryDao().upsertEntry(e)
         return e
     }
 
-    suspend fun loadDiary(date: String): DiaryBundle? {
-        val e = db.diaryDao().entryByDate(date) ?: return null
-        return DiaryBundle(
-            entry = e,
-            segments = db.diaryDao().segments(e.id),
-            photos = db.diaryDao().photos(e.id)
-        )
-    }
+    /** 某一天的全部日记，按写入时间正序（最早写的在前）。 */
+    suspend fun loadDiaries(date: String): List<DiaryBundle> =
+        db.diaryDao().entriesByDate(date).map { e ->
+            DiaryBundle(
+                entry = e,
+                segments = db.diaryDao().segments(e.id),
+                photos = db.diaryDao().photos(e.id)
+            )
+        }
 
     suspend fun loadDiaryById(id: String): DiaryBundle? {
         val e = db.diaryDao().entryById(id) ?: return null

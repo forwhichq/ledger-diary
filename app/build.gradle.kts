@@ -12,8 +12,8 @@ android {
         applicationId = "com.ledgerdiary.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         vectorDrawables { useSupportLibrary = true }
         resourceConfigurations += listOf("zh", "en")
     }
@@ -49,6 +49,9 @@ android {
     }
     buildFeatures {
         compose = true
+        // 版本号只有一处真源（defaultConfig.versionName），界面和备份包里都读 BuildConfig，
+        // 免得升级时漏改某一处、设置页还显示旧版本。
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"

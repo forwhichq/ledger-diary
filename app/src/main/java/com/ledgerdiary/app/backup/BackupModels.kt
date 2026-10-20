@@ -10,7 +10,7 @@ import com.google.gson.annotations.SerializedName
 data class BackupFile(
     @SerializedName("format") val format: String = FORMAT,
     @SerializedName("version") val version: Int = 1,
-    @SerializedName("appVersion") val appVersion: String = "1.0.0",
+    @SerializedName("appVersion") val appVersion: String = com.ledgerdiary.app.BuildConfig.VERSION_NAME,
     @SerializedName("exportedAt") val exportedAt: Long = System.currentTimeMillis(),
     @SerializedName("deviceId") val deviceId: String = "",
     @SerializedName("profile") val profile: ProfileDto? = null,

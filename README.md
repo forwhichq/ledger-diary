@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | 包名 | `com.ledgerdiary.app` |
-| 版本 | 1.0.0 (versionCode 1) |
+| 版本 | 1.1.0 (versionCode 2) |
 | 最低支持 | Android 8.0（API 26） |
 | 目标版本 | Android 14（API 34） |
 | release APK | 约 11.2 MB |
@@ -20,6 +20,7 @@
 
 ## 目录
 
+- [v1.1.0 改了什么](#v110-改了什么)
 - [界面预览](#界面预览)
 - [功能](#功能)
 - [技术栈](#技术栈)
@@ -35,21 +36,45 @@
 
 ---
 
+## v1.1.0 改了什么
+
+v1.0.0 里「一天 = 一篇日记」是写死在数据库里的（`diary_entries.date` 上有唯一索引）。实际用下来这个假设太硬：早上通勤想记两行、晚上睡前又想记一段，同一天的心情和地点根本不是一回事。
+
+v1.1.0 把「天」和「篇」拆开：
+
+| | v1.0.0 | v1.1.0 |
+|---|---|---|
+| 一天几篇 | 只能 1 篇 | **可以写任意多篇** |
+| 心情 / 天气 / 地址 | 挂在「这一天」上 | **挂在每一篇上**，每篇都可以不一样 |
+| 当天心情怎么算 | 就是那一篇的心情 | 取**这天最后一篇填了心情的**（只写一篇时行为完全不变） |
+| 日记列表 | 一天一张卡片 | 按天分组，天内按时间列出「第 1 篇 / 第 2 篇」 |
+| 日历 | 一个绿点 | 一个绿点；同一天多篇时**多一个点**，底部逐篇列出 |
+| 数据库 | `version = 1`，date 唯一索引 | `version = 2`，date 普通索引（**带 Migration，老数据不丢**） |
+| 编辑页路由 | `diaryEdit?date={date}` | `diaryEdit?id={id}&date={date}`（id 定位到「某一篇」） |
+
+升级实测过：先装 v1.0.0、写两篇老日记，再用 v1.1.0 覆盖安装，`PRAGMA user_version` 从 1 变 2、唯一索引被换成普通索引、老日记和段落一条没少。
+
+---
+
 ## 界面预览
 
 | 引导页 | 流水 | 记一笔 |
 |---|---|---|
 | ![引导页](docs/screenshots/01-onboarding.png) | ![流水](docs/screenshots/02-ledger.png) | ![记一笔](docs/screenshots/03-add-transaction.png) |
 
-| 写日记 | 统计 | 日历 |
+| 日记列表（一天多篇） | 编辑某一篇 | 新写一篇 |
 |---|---|---|
-| ![写日记](docs/screenshots/04-diary.png) | ![统计](docs/screenshots/05-stats.png) | ![日历](docs/screenshots/06-calendar.png) |
+| ![日记列表](docs/screenshots/04-diary-list.png) | ![编辑日记](docs/screenshots/05-diary-edit.png) | ![写日记](docs/screenshots/06-diary-new.png) |
 
-| 备份与恢复 |
-|---|
-| ![备份](docs/screenshots/07-backup.png) |
+| 每篇自己的地址 | 收支总览 | 支出 × 心情 |
+|---|---|---|
+| ![地址](docs/screenshots/07-diary-location.png) | ![统计](docs/screenshots/08-stats.png) | ![心情统计](docs/screenshots/09-stats-mood.png) |
 
-> 截图来自 Android 14 x86_64 模拟器（1080×2400，420dpi）。
+| 日历 | 日历 · 当天多篇 | 备份与恢复 | 我的 |
+|---|---|---|---|
+| ![日历](docs/screenshots/10-calendar.png) | ![日历日记](docs/screenshots/11-calendar-diary.png) | ![备份](docs/screenshots/12-backup.png) | ![我的](docs/screenshots/13-me.png) |
+
+> 截图来自 Android 14 x86_64 模拟器（1080×2400，420dpi），用的是演示数据。
 
 ---
 
@@ -67,13 +92,15 @@
 
 ### 日记
 
-- **一天一篇**，但正文可以分成**多个段落**，每段有自己的时间戳 —— 早上写一段、晚上补一段，时间线是真实的
+- **一天可以写很多篇**。列表按天分组，天内按写入时间正序排「第 1 篇 / 第 2 篇」，像一条时间线；每天右上角有「再写一篇」
+- 每篇的正文还可以分成**多个段落**，每段有自己的时间戳 —— 早上写一段、晚上补一段
+- **心情、天气、地址都是「每篇」的**，不是「每天」的：上午在西湖区写了篇「不错」，晚上在滨江区加班写了篇「很差」，两篇各自记录
+- **当天心情**由当天各篇派生：取这天最后一篇填了心情的那篇（只写一篇时和 v1.0.0 完全一样）。日历和统计里显示的就是这个值
 - 心情 5 档（很差 / 一般 / 还行 / 不错 / 很好），可清除
 - 标签用逗号分隔，列表页显示成 `#tag` 小胶囊
-- 天气、位置都是**手动填**（不联网、不定位），不需要可以关掉
+- 天气、地址都是**手动填**（不联网、不定位），不需要可以关掉
 - 照片最多 9 张：走系统 Photo Picker（只给你选的那几张授权），导入时压到长边 1600px / JPEG 85，并且**按 EXIF 修正旋转**，竖拍照片不会横着躺
 - 长按日记卡片删除 → 同样 5 秒撤销，撤销会把整篇（含段落和照片引用）原样写回
-- 列表页显示每篇的第一段文字 + 第一张图 + 心情点 + 标签
 
 ### 统计
 
@@ -82,12 +109,13 @@
 - 收支总览：支出、收入、结余、日均支出 + 分类排行环形图 + 最近 12 个月柱状图
 - 点分类排行里的一行 → 弹出**该分类在当前区间的明细**（只读，要改去流水页点它）
 - 支出 × 心情：柱子是当天支出，折线是当天心情，并给出结论文字，例如「心情差（1-2）的那些天，平均花 xx」
+- 心情按**天**去重统计：一天写了三篇也只算一天，心情取当天最后一篇填的那个
 
 ### 日历
 
-- 月视图，日期上有两个标记：**红点 = 有账**，**绿点 = 有日记**
-- 点某一天，下方列出当天账目和日记摘要
-- 「记一笔」直接带着这个日期进入记账页
+- 月视图，日期上有三个标记：**红点 = 有账**，**绿点 = 有日记**，**第三个点 = 这天不止一篇日记**
+- 点某一天，下方列出当天账目，再下面是「这天有 N 篇日记」，逐篇列出「时间 / 第几篇 / 地址 / 打开」
+- 「记一笔」直接带着这个日期进入记账页；「再写一篇」直接带着这个日期新建一篇日记
 - 日记卡片永远可点：有日记显示「打开」，没日记显示「写」—— 日历是找日子的地方，不该只能看不能进
 
 ### 我的
@@ -97,6 +125,7 @@
 - 备份与恢复（见下）
 - 应用锁开关
 - 「这个 App 不联网」说明
+- 底部版本号读 `BuildConfig.VERSION_NAME`，不再手写
 
 ### 备份与恢复
 
@@ -113,6 +142,7 @@
 - 选 zip 后先预览（导出时间、来自设备、账目 N 笔、日记 N 篇、照片 N 张），加密包会要求先输密码
 - **合并**：把备份里的记录追加进来，重复 id 的直接跳过，不动现有数据
 - **覆盖还原**：先自动把当前数据另存一份（`exportZip(null)`），再清空四张表并删照片目录，然后恢复 —— 选错了还能从自动备份退回来
+- 备份格式向后兼容：v1.0.0 导出的包能导进 v1.1.0（`DiaryEntryDto` 字段没变，一天多篇只是多了几行）
 
 ### 应用锁
 
@@ -172,7 +202,7 @@ ledger-diary/
             ├── data/                      # 数据层
             │   ├── Entities.kt            # 6 张表的实体定义
             │   ├── Daos.kt                # 4 个 DAO
-            │   ├── AppDatabase.kt         # Room 数据库（version 1）
+            │   ├── AppDatabase.kt         # Room 数据库（version 2）+ MIGRATION_1_2
             │   └── Repository.kt          # 唯一的数据入口 + DiaryBundle
             ├── backup/
             │   ├── BackupManager.kt       # 导出 / 预览 / 导入、加解密
@@ -187,39 +217,43 @@ ledger-diary/
             └── util/
                 ├── Money.kt               # 分 ↔ 字符串、键盘输入拼接
                 ├── DateUtils.kt           # 日期格式化、相对时间
+                ├── DiaryUtils.kt          # 「天 / 篇」分组、当天心情的取法
                 ├── PhotoStore.kt          # 照片导入压缩、EXIF 旋转
                 ├── FileSaver.kt           # 存下载目录 / 存到指定 Uri / 分享
                 └── AppSettings.kt         # SharedPreferences 开关
 ```
 
-代码量约 **5,300 行 Kotlin**，29 个文件。
+代码量约 **5,240 行 Kotlin**，30 个文件。
 
 ### 架构约定
 
 - **单 Activity + Compose + 单 ViewModel**。数据量小，一个 `AppViewModel` 持有全部 `StateFlow`，页面之间共享同一份数据，不需要在 nav graph 里传参。
 - **Repository 是唯一数据入口**，UI 不直接碰 DAO（少数列表页为了少写 join 会查一下 DAO）。
-- **路由**：`ledger` / `add?id={id}&date={date}` / `diary` / `diaryEdit?date={date}` / `stats` / `calendar` / `me` / `profile` / `backup`。
+- **路由**：`ledger` / `add?id={id}&date={date}` / `diary` / `diaryEdit?id={id}&date={date}` / `stats` / `calendar` / `me` / `profile` / `backup`。
 - **金额永远用 `Long` 存「分」**，展示时才转字符串，避免浮点误差。
+- **「天」不是数据行**。`diary_entries` 一行就是一篇日记；「这一天」只是界面上的分组，由 `DiaryUtils.groupByDay()` 现算。这样一天想写几篇都不用改表。
 
 ---
 
 ## 数据模型
 
-6 张表，全部 `version = 1`：
+6 张表，Room `version = 2`：
 
 | 表 | 说明 | 主键 |
 |---|---|---|
 | `transactions` | 账目：方向、金额（分）、分类名、备注、日期、`deletedAt` 软删 | String UUID |
 | `categories` | 分类：名称（唯一）、图标、颜色、排序、使用次数 | String UUID |
-| `diary_entries` | 日记：日期（唯一，一天一篇）、心情 0-5、标签、天气、位置 | String UUID |
+| `diary_entries` | 日记：**一行 = 一篇**，日期（普通索引，同一天可多行）、心情 0-5、标签、天气、地址 | String UUID |
 | `diary_segments` | 日记段落：属于某篇、正文、排序（外键 CASCADE） | String UUID |
 | `diary_photos` | 日记照片：属于某篇、文件名（存在 `filesDir/photos/`） | String UUID |
 | `profile` | 本机档案：昵称、头像文件名、deviceId、deviceLabel | 固定 `"local"` |
 
+**迁移**：`AppDatabase.MIGRATION_1_2` 只做两件事 —— 删掉 `index_diary_entries_date` 的唯一索引，再按同名建一个普通索引。**不重建表**（重建要整表搬家，低端机上风险更高）。索引名刻意保持不变，Room 启动时的 schema 校验才对得上。
+
 **为后续新增需求留的后路**（写进 `Entities.kt` 注释里的设计原则）：
 
 1. 主键全用 **String UUID**，不用自增 `Long` —— 两台手机的记录合并时不会撞 ID，以后做同步也不用改表。
-2. 所有业务表都有 `createdAt` / `updatedAt` —— 以后要做「最近修改」「增量同步」直接可用。
+2. 所有业务表都有 `createdAt` / `updatedAt` —— 以后要做「最近修改」「增量同步」直接可用；「天内第几篇」也是靠 `createdAt` 排出来的，没存冗余序号。
 3. 字段尽量宽松，新增字段一律给默认值；升级走 Room `Migration`，**明确不用 `fallbackToDestructiveMigration`**（那会清空用户数据）。
 4. 已经预留但还没用的字段：`transactions.accountName`（多账户）、`transactions.deletedAt`（回收站）、`diary_photos.segmentId`（照片挂到某一段）、`categories.direction`（收支独立分类）。
 
@@ -250,7 +284,7 @@ zip 包结构：
 }
 ```
 
-`data.json` 解密后是 `BackupFile` 的 JSON：`transactions` / `categories` / `diaryEntries` / `diarySegments` / `diaryPhotos` / `profile`。
+`data.json` 解密后是 `BackupFile` 的 JSON：`transactions` / `categories` / `diaryEntries` / `diarySegments` / `diaryPhotos` / `profile`。其中 `diaryEntries` 是**扁平的一行一篇**，同一天有几篇就有几条记录（没有「天」这一层对象），所以 v1.0.0 的包和 v1.1.0 的包结构完全兼容。
 
 **加密细节**：AES-256/GCM/NoPadding，密钥 = `PBKDF2WithHmacSHA256(密码, salt, 100000 轮, 256 位)`，salt 16 字节、IV 12 字节随机生成，GCM tag 128 位（附在密文尾部）。
 
@@ -325,6 +359,8 @@ keytool -genkeypair -v -keystore keystore/my-release.jks \
 adb install -r app-release.apk
 ```
 
+**升级注意**：v1.0.0 → v1.1.0 可以直接覆盖安装（同一个 keystore 签的名），数据库会自动走 `MIGRATION_1_2`，账目和日记都不会丢。**但不要卸载重装** —— `android:allowBackup="false"`，卸载就是真的删库。
+
 **注意**：`release` 包名是 `com.ledgerdiary.app`，`debug` 包名是 `com.ledgerdiary.app.debug`，两个是**独立的 App**，数据不互通。换包会看到两套数据，不是 bug。
 
 ---
@@ -353,6 +389,13 @@ adb install -r app-release.apk
 6. **`input`/`text` 相关的小坑**（只影响自动化测试）
    `adb shell input text` 输中文会抛 `NullPointerException`；坐标不能靠截图目测，必须用 `uiautomator dump` 拿 `bounds` 再点。
 
+7. **一天多篇不能靠「删掉唯一索引」一句 SQL 了事**（v1.1.0）
+   Room 的 schema 校验是按「表 + 索引名 + 是否唯一」逐项对账的。想把 `diary_entries.date` 从唯一索引改成普通索引，必须：① 实体上的 `@Entity(indices = ...)` 改掉；② `@Database(version = 2)`；③ 手写 `Migration(1, 2)` 里 `DROP INDEX IF EXISTS` + `CREATE INDEX IF NOT EXISTS`，而且**索引名要和 Room 生成的名字一模一样**（`index_diary_entries_date`），否则升级后一启动就 `IllegalStateException: Migration didn't properly handle`。
+   另外别图省事用 `fallbackToDestructiveMigration()` —— 那会直接把用户的日记清空。
+
+8. **编辑页的 `LaunchedEffect` key 不能只写 `loaded`**（v1.1.0）
+   日记编辑页里有「`loaded` 之后如果一段都没有就自动加一段」的逻辑。如果 key 只有 `loaded`，从「今天」切到「另一天（没有日记）」时 key 没变、副作用不重跑，页面就会变成**一个输入框都没有**。key 必须带上日期 / 篇 id。
+
 ---
 
 ## 已知限制
@@ -362,6 +405,7 @@ adb install -r app-release.apk
 - **删除照片是物理删除**：在日记编辑页点照片上的 ×，会立刻删掉文件并落盘（防止孤儿文件）。日记删除的 5 秒撤销只覆盖整篇日记，不覆盖这个单独的照片删除动作。
 - **没有回收站**：账目是软删除（`deletedAt`），但 UI 只有 5 秒撤销，没有「回收站」页面。
 - **加密只保护 `data.json`**，备份包里的照片是明文的。
+- **「当天心情」是派生值，不能单独编辑**：一天多篇时它固定取「最后一篇填了心情的」，想改当天心情就去改那一篇。
 - **无单元测试 / 无 CI**：目前是靠 Android 14 模拟器人工走查验证的。
 - `release` 没开混淆（`isMinifyEnabled = false`），体积还能再压。
 
@@ -374,10 +418,11 @@ adb install -r app-release.apk
 1. **多账户** —— `transactions.accountName` 已存在，加一张 `accounts` 表和切换 UI 即可。
 2. **回收站** —— `deletedAt` 已经是软删除，加一个查询 `deletedAt IS NOT NULL` 的页面。
 3. **增量备份 / 导入去重** —— 主键是 UUID + 有 `updatedAt`，可以按 id + 时间戳做「只导入更新的」。
-4. **桌面小组件** —— 「今天花了多少」「今天写日记了吗」。
-5. **图表增强** —— 月度对比、分类趋势、预算超支提醒。
-6. **深色模式手动切换** —— 现在是跟随系统。
-7. **数据加密（SQLCipher）** —— 目前数据库本身是明文的，只有备份可以加密。
+4. **日记按标签 / 心情检索** —— 现在标签只是显示，没做筛选。
+5. **桌面小组件** —— 「今天花了多少」「今天写日记了吗」。
+6. **图表增强** —— 月度对比、分类趋势、预算超支提醒。
+7. **深色模式手动切换** —— 现在是跟随系统。
+8. **数据加密（SQLCipher）** —— 目前数据库本身是明文的，只有备份可以加密。
 
 ---
 
