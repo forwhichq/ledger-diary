@@ -7,6 +7,8 @@
 - 备份/恢复靠自己导出的 zip 文件，可以加密，可以丢进网盘或发给自己
 - 单 Activity + Jetpack Compose，纯 Kotlin，无 native 代码（全 ABI 通用）
 
+**直接下载安装包**：[`ledger-diary-v1.2.0.apk`](https://github.com/forwhichq/ledger-diary/releases/latest/download/ledger-diary-v1.2.0.apk)（11.2 MB，已签名，覆盖安装不会丢数据）
+
 | | |
 |---|---|
 | 包名 | `com.ledgerdiary.app` |
@@ -392,6 +394,12 @@ keytool -genkeypair -v -keystore keystore/my-release.jks \
 ---
 
 ## 安装到手机
+
+**方式零：从 Releases 下载（最省事）**
+
+打开 [Releases](https://github.com/forwhichq/ledger-diary/releases)，下载最新的 `ledger-diary-vX.Y.Z.apk`，传到手机上点开安装。
+
+> 为什么不把 APK 提交进仓库：11 MB 的二进制一旦进了 git 历史就永久留在那里，每发一版翻一倍。Releases 的附件就是为分发构建产物设计的，而且不占仓库体积。
 
 **方式一：直接传 APK**
 
