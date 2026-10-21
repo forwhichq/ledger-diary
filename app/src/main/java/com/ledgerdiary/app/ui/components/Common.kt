@@ -180,6 +180,19 @@ fun UndoBar(
     }
 }
 
+/**
+ * 心情的 emoji 与文字，列表 / 日历 / 统计共用一份，避免各页面写得不一样。
+ * 下标 0 是「没填」，所以真实心情 1..5 对应下标 1..5。
+ */
+val MoodEmoji = listOf("", "😖", "😕", "😐", "🙂", "😄")
+val MoodWord = listOf("未填", "很差", "一般", "还行", "不错", "很好")
+
+fun moodText(mood: Int): String {
+    if (mood <= 0) return MoodWord[0]
+    val i = mood.coerceIn(1, 5)
+    return MoodEmoji[i] + " " + MoodWord[i]
+}
+
 /** 心情圆点 */
 @Composable
 fun MoodDot(mood: Int, size: Int = 10) {

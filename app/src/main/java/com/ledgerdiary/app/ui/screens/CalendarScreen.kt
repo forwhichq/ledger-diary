@@ -21,6 +21,7 @@ import com.ledgerdiary.app.data.TransactionEntity
 import com.ledgerdiary.app.ui.AppViewModel
 import com.ledgerdiary.app.ui.components.MoneyText
 import com.ledgerdiary.app.ui.components.MoodDot
+import com.ledgerdiary.app.ui.components.moodText
 import com.ledgerdiary.app.ui.components.SurfaceCard
 import com.ledgerdiary.app.ui.theme.ExpenseRed
 import com.ledgerdiary.app.ui.theme.IncomeGreen
@@ -47,6 +48,8 @@ fun CalendarScreen(
     val txByDate = remember(all) { all.groupBy { it.date } }
     // 一天可以有多篇，所以这里是 groupBy 而不是 associateBy
     val diaryByDate = remember(entries) { entries.groupBy { it.date } }
+    // 每天的心情色：日历格子上直接用颜色表示当天心情，比一个「有日记」的绿点信息量大
+    val dayMoodMap = remember(entries) { DiaryUtils.moodByDate(entries) }
 
     val first = ym.atDay(1)
     val daysInMonth = ym.lengthOfMonth()
@@ -123,8 +126,12 @@ fun CalendarScreen(
                                 val hasTx = txByDate.containsKey(dateStr)
                                 val hasDiary = diaryByDate.containsKey(dateStr)
                                 val diaryCount = diaryByDate[dateStr]?.size ?: 0
+                                val dayMood = dayMoodMap[dateStr] ?: 0
                                 val isToday = dateStr == DateUtils.today()
                                 val isSel = dateStr == selected
+                                // 有日记的那天：底色是心情色（没填心情就用中性灰），
+                                // 这样扫一眼日历就知道这个月哪天开心、哪天难受。
+                                val moodColor = MoodPalette[dayMood.coerceIn(0, 5)]
                                 Box(
                                     Modifier
                                         .weight(1f)
@@ -134,6 +141,7 @@ fun CalendarScreen(
                                         .background(
                                             when {
                                                 isSel -> MaterialTheme.colorScheme.primaryContainer
+                                                hasDiary -> moodColor.copy(alpha = if (dayMood > 0) 0.40f else 0.16f)
                                                 isToday -> MaterialTheme.colorScheme.surfaceVariant
                                                 else -> androidx.compose.ui.graphics.Color.Transparent
                                             }
@@ -155,9 +163,10 @@ fun CalendarScreen(
                                                 Modifier.size(4.dp).clip(RoundedCornerShape(50))
                                                     .background(ExpenseRed)
                                             )
+                                            // 心情点：颜色就是当天心情（没填心情显示中性灰点）
                                             if (hasDiary) Box(
-                                                Modifier.size(4.dp).clip(RoundedCornerShape(50))
-                                                    .background(MoodPalette[4])
+                                                Modifier.size(6.dp).clip(RoundedCornerShape(50))
+                                                    .background(moodColor)
                                             )
                                             // 一天多篇：再加一个小点，提示这天不止一篇
                                             if (diaryCount > 1) Box(
@@ -176,9 +185,16 @@ fun CalendarScreen(
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LegendDot(ExpenseRed, "有账")
-                    LegendDot(MoodPalette[4], "有日记")
-                    LegendDot(MoodPalette[2], "多篇")
+                    LegendDot(MoodPalette[4], "心情好")
+                    LegendDot(MoodPalette[2], "心情一般")
+                    LegendDot(MoodPalette[1], "心情差")
                 }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "日记那天的底色和圆点就是当天心情；没填心情是灰的。",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -243,8 +259,7 @@ fun CalendarScreen(
                             if (selDiaries.isEmpty()) {
                                 "点下面「写这篇」，补写这一天"
                             } else {
-                                "心情 " + (if (selMood > 0) selMood.toString() + "/5" else "未填") +
-                                        " · 点某一篇进去改"
+                                "当天心情 " + moodText(selMood) + " · 点某一篇进去改"
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

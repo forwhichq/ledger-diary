@@ -10,7 +10,7 @@
 | | |
 |---|---|
 | 包名 | `com.ledgerdiary.app` |
-| 版本 | 1.1.0 (versionCode 2) |
+| 版本 | 1.2.0 (versionCode 3) |
 | 最低支持 | Android 8.0（API 26） |
 | 目标版本 | Android 14（API 34） |
 | release APK | 约 11.2 MB |
@@ -20,6 +20,7 @@
 
 ## 目录
 
+- [v1.2.0 改了什么](#v120-改了什么)
 - [v1.1.0 改了什么](#v110-改了什么)
 - [界面预览](#界面预览)
 - [功能](#功能)
@@ -33,6 +34,39 @@
 - [已知限制](#已知限制)
 - [后续可以加什么](#后续可以加什么)
 - [签名与安全说明](#签名与安全说明)
+
+---
+
+## v1.2.0 改了什么
+
+这一版只做两件事：**日历上直接看见心情**，以及**把页面滑动改顺**。
+
+### 1. 日历上显示心情
+
+v1.1.0 的日历只有「有账 / 有日记 / 多篇」三个小点 —— 知道那天写过东西，但看不出那天过得怎么样。v1.2.0 把当天心情直接画进格子：
+
+- 有日记的那天，格子**底色就是心情色**（很差灰蓝 / 一般米灰 / 还行暖黄 / 不错浅绿 / 很好正绿），透明度 40%
+- 格子里的小圆点也换成心情色；没填心情的那天是中性灰（透明度和圆点都更淡，一眼能区分「写了但没填心情」和「填了心情」）
+- 底部图例换成「有账 / 心情好 / 心情一般 / 心情差」，并加一句说明
+- 点某一天，卡片上的文案从「心情 3/5」改成「当天心情 🙂 不错」，比数字好读
+
+> 为什么用底色而不是再加一个点：日历格子里已经有「有账」和「多篇」两个点了，再叠第三个会挤成一排看不出区别；底色是唯一不占位置的信息通道，扫一眼整个月就能看出情绪的起伏。
+
+### 2. 页面滑动改顺了
+
+**问题**：v1.1.0 的五个主页面装在 `NavHost` 里，点底部导航走的是 `nav.navigate(route)`。NavHost 把页面之间的关系理解成「前进 / 后退」，所以无论从哪一页点到哪一页，转场永远是 `slideIntoContainer(Left)` —— 内容从右边滑进来。从「统计」点「日记」，明明是往左走，页面却是左滑进来的，方向跟手指对不上，看着就别扭。
+
+**改法**：把五个主页面从 NavHost 里搬出来，装进一个 `HorizontalPager`：
+
+| | v1.1.0 | v1.2.0 |
+|---|---|---|
+| 主页面容器 | `NavHost`（五条路由） | `HorizontalPager`（五页） |
+| 切页方式 | 只能点底部导航 | **点导航 + 左右滑动屏幕** |
+| 转场方向 | 永远左滑（与位置无关） | 跟随手指 / 目标页位置，**从哪边来就从哪边滑** |
+| 返回键 | 直接退出 App | 不在第一页时先回第一页 |
+| 详情页 | 同一套左右滑转场 | 改成从下往上淡入，退出时落回去 |
+
+现在「统计 → 日记」是往右滑回去，「日记 → 统计」是往左推进，跟手指的方向一致。详情页（记一笔 / 写日记 / 备份 / 资料）仍然走 NavHost，但换成**上下**方向的转场 —— 用方向的差异告诉用户「这是盖在主界面上的一层，不是并排的另一页」。
 
 ---
 
@@ -208,7 +242,8 @@ ledger-diary/
             │   ├── BackupManager.kt       # 导出 / 预览 / 导入、加解密
             │   └── BackupModels.kt        # 备份包 DTO
             ├── ui/
-            │   ├── AppRoot.kt             # 底部 5 个 tab + NavHost
+            │   ├── AppRoot.kt             # 底部 5 个 tab + NavHost（详情页）
+            │   ├── MainPager.kt           # 五个主页面的 HorizontalPager
             │   ├── AppViewModel.kt        # 全局唯一的 ViewModel
             │   ├── AppLock.kt             # LockState + 锁屏页
             │   ├── components/            # SurfaceCard / MoneyText / 图表等
@@ -229,7 +264,8 @@ ledger-diary/
 
 - **单 Activity + Compose + 单 ViewModel**。数据量小，一个 `AppViewModel` 持有全部 `StateFlow`，页面之间共享同一份数据，不需要在 nav graph 里传参。
 - **Repository 是唯一数据入口**，UI 不直接碰 DAO（少数列表页为了少写 join 会查一下 DAO）。
-- **路由**：`ledger` / `add?id={id}&date={date}` / `diary` / `diaryEdit?id={id}&date={date}` / `stats` / `calendar` / `me` / `profile` / `backup`。
+- **主页面用 Pager，详情页用 NavHost**。五个 tab 页（流水/日记/统计/日历/我的）在 `MainPager.kt` 的 `HorizontalPager` 里，所以能左右滑、转场方向跟手指一致；详情页走 NavHost 路由：`add?id={id}&date={date}` / `diaryEdit?id={id}&date={date}` / `profile` / `backup`。
+- **返回键先回第一页**。不在「流水」页时按返回键是切回第一页，不直接退出 App。
 - **金额永远用 `Long` 存「分」**，展示时才转字符串，避免浮点误差。
 - **「天」不是数据行**。`diary_entries` 一行就是一篇日记；「这一天」只是界面上的分组，由 `DiaryUtils.groupByDay()` 现算。这样一天想写几篇都不用改表。
 
@@ -359,7 +395,7 @@ keytool -genkeypair -v -keystore keystore/my-release.jks \
 adb install -r app-release.apk
 ```
 
-**升级注意**：v1.0.0 → v1.1.0 可以直接覆盖安装（同一个 keystore 签的名），数据库会自动走 `MIGRATION_1_2`，账目和日记都不会丢。**但不要卸载重装** —— `android:allowBackup="false"`，卸载就是真的删库。
+**升级注意**：v1.0.0 → v1.1.0 → v1.2.0 都可以直接覆盖安装（同一个 keystore 签的名），数据库会自动走 `MIGRATION_1_2`，账目和日记都不会丢。**但不要卸载重装** —— `android:allowBackup="false"`，卸载就是真的删库。
 
 **注意**：`release` 包名是 `com.ledgerdiary.app`，`debug` 包名是 `com.ledgerdiary.app.debug`，两个是**独立的 App**，数据不互通。换包会看到两套数据，不是 bug。
 
@@ -395,6 +431,12 @@ adb install -r app-release.apk
 
 8. **编辑页的 `LaunchedEffect` key 不能只写 `loaded`**（v1.1.0）
    日记编辑页里有「`loaded` 之后如果一段都没有就自动加一段」的逻辑。如果 key 只有 `loaded`，从「今天」切到「另一天（没有日记）」时 key 没变、副作用不重跑，页面就会变成**一个输入框都没有**。key 必须带上日期 / 篇 id。
+
+9. **NavHost 的转场方向表达不了「并排的兄弟页面」**（v1.2.0）
+   `slideIntoContainer(Left)` 表达的是「从右边推入一个新页面」，语义是前进/后退。五个 tab 是平级关系，用 NavHost 切来切去，方向永远一样 —— 从最右边的「日历」点「流水」，内容还是从右边滑进来，看着像倒着走。修法是把平级页面放进 `HorizontalPager`，转场由手势和目标索引决定。**记住 `beyondViewportPageCount` 在 Compose 1.6 里叫 `beyondBoundsPageCount`**，写错会直接编译失败。
+
+10. **`HorizontalPager` 的页面必须自己处理返回键**（v1.2.0）
+   NavHost 会自动接管返回栈，Pager 不会。不处理的话，用户在「日历」页按返回键直接退出 App，比 v1.1.0 还难用。修法：`BackHandler(enabled = pager.currentPage > 0) { scope.launch { pager.animateScrollToPage(0) } }`。
 
 ---
 
